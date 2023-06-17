@@ -1,0 +1,25 @@
+{
+ "addr": "bufconn",
+ "code": "OK",
+ "header": {
+  ":authority": [
+   "bufnet"
+  ],
+  "authorization": [
+   "sometoken"
+  ],
+  "content-type": [
+   "application/grpc"
+  ],
+  "user-agent": [
+   "grpc-go/1.55.0"
+  ]
+ },
+ "method": "/helloworld.v1.GreeterService/SayHello",
+ "request": {
+  "name": "John Doe"
+ },
+ "response": {
+  "message": "Hello John Doe"
+ }
+}

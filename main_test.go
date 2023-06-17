@@ -9,15 +9,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alextanhongpin/core/test/testutil"
 	pb "github.com/alextanhongpin/go-grpc-test/helloworld/v1"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 )
 
 const bufSize = 1024 * 1024
+
+var testIDs = make(map[uuid.UUID]*testing.T)
 
 var lis *bufconn.Listener
 
@@ -53,9 +58,18 @@ func TestSayHello(t *testing.T) {
 
 	client := pb.NewGreeterServiceClient(conn)
 
+	id := uuid.New()
+	testIDs[id] = t
+	t.Cleanup(func() {
+		delete(testIDs, id)
+	})
+
 	// Send token.
-	// md := metadata.New(map[string]string{})
-	md := metadata.Pairs("authorization", "sometoken")
+	md := metadata.New(map[string]string{
+		"authorization": "sometoken",
+		"x-test-id":     id.String(),
+	})
+	//md := metadata.Pairs("authorization", "sometoken")
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
 	// Anything linked to this variable will fetch response headers.
@@ -78,6 +92,21 @@ func TestSayHello(t *testing.T) {
 	t.Log("response header:", header)
 }
 
+type contextKey string
+
+var testContextKey contextKey = "test_ctx"
+
+func withTestContext(ctx context.Context, t *testing.T) context.Context {
+	return context.WithValue(ctx, testContextKey, t)
+}
+func testContext(ctx context.Context) (t *testing.T) {
+	t, ok := ctx.Value(testContextKey).(*testing.T)
+	if !ok {
+		panic("test context not found")
+	}
+	return t
+}
+
 type server struct {
 	pb.UnimplementedGreeterServiceServer
 }
@@ -96,11 +125,11 @@ func (s *server) SayHello(ctx context.Context, in *pb.SayHelloRequest) (*pb.SayH
 		return nil, status.Errorf(codes.Internal, "unable to send 'x-response-id' header")
 	}
 	// Uncomment this to return error.
-	//return nil, status.Errorf(codes.Internal, "unable to send 'x-response-id' header")
+	return nil, status.Errorf(codes.Internal, "unable to send 'x-response-id' header")
 
-	return &pb.SayHelloResponse{
-		Message: "Hello " + in.GetName(),
-	}, nil
+	//return &pb.SayHelloResponse{
+	//Message: "Hello " + in.GetName(),
+	//}, nil
 }
 
 func withUnaryInterceptor() grpc.DialOption {
@@ -136,6 +165,7 @@ func authorize(ctx context.Context) error {
 		return status.Errorf(codes.InvalidArgument, "Retrieving metadata is failed")
 	}
 
+	fmt.Println("AUTHORIZE")
 	fmt.Println("md:", md)
 	authHeader, ok := md["authorization"]
 	if !ok {
@@ -149,20 +179,56 @@ func authorize(ctx context.Context) error {
 func unaryInterceptor() grpc.ServerOption {
 	return grpc.UnaryInterceptor(
 		func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-			defer func(start time.Time) {
-				fmt.Println("TOOK:", time.Since(start))
-			}(time.Now())
-			fmt.Println("SERVER")
-			fmt.Println("req:", req)
-			fmt.Printf("info: %#v\n", info)
-			fmt.Printf("info.FullMethod: %#v\n", info.FullMethod)
-			fmt.Printf("info.Server: %#v\n", info.Server)
+			var header metadata.MD
+			if md, ok := metadata.FromIncomingContext(ctx); ok {
+				header = md
+			}
+			testID := header.Get("x-test-id")[0]
+			header.Delete("x-test-id")
+			id, err := uuid.Parse(testID)
+			if err != nil {
+				panic("invalid test id")
+			}
+			t := testIDs[id]
+
+			fmt.Println("SERVER REQUEST")
+
+			m := map[string]any{
+				"header":  header,
+				"method":  info.FullMethod,
+				"request": req,
+			}
 			if err := authorize(ctx); err != nil {
 				return nil, err
 			}
 
+			var addr string
+			if pr, ok := peer.FromContext(ctx); ok {
+				if tcpAddr, ok := pr.Addr.(*net.TCPAddr); ok {
+					addr = tcpAddr.IP.String()
+				} else {
+					addr = pr.Addr.String()
+				}
+			}
+
+			fmt.Println("RESPONSE")
 			h, err := handler(ctx, req)
-			fmt.Println("res", h)
+
+			code := grpc.Code(err).String()
+			m["addr"] = addr
+			m["code"] = code
+			if err != nil {
+				m["error"] = struct {
+					Code    string `json:"code"`
+					Message string `json:"message"`
+				}{
+					Code:    code,
+					Message: err.Error(),
+				}
+			}
+			m["response"] = h
+
+			testutil.DumpJSON(t, m)
 			return h, err
 		},
 	)

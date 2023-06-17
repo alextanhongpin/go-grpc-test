@@ -1,0 +1,15 @@
+GRPC /helloworld.v1.GreeterService/SayHello
+:authority: buffnet
+authorization: sometoken
+content-type: application/grpc
+user-agent: grpc-go/1.55.0
+
+{
+  "name": "John Doe"
+}
+
+
+HTTP/2 - OK
+{
+  "message": "Hello John Doe"
+}
