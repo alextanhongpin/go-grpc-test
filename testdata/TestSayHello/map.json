@@ -1,10 +1,6 @@
 {
  "addr": "bufconn",
- "code": "Internal",
- "error": {
-  "code": "Internal",
-  "message": "rpc error: code = Internal desc = unable to send 'x-response-id' header"
- },
+ "code": "OK",
  "header": {
   ":authority": [
    "bufnet"
@@ -23,5 +19,7 @@
  "request": {
   "name": "John Doe"
  },
- "response": null
+ "response": {
+  "message": "Hello John Doe"
+ }
 }

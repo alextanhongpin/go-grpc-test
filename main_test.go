@@ -3,6 +3,7 @@ package main_test
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -30,6 +31,7 @@ func TestMain(m *testing.M) {
 	lis = bufconn.Listen(bufSize)
 	s := grpc.NewServer(
 		unaryInterceptor(),
+		streamInterceptor(),
 	)
 	pb.RegisterGreeterServiceServer(s, &server{})
 	go func() {
@@ -43,13 +45,56 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+func TestStreaming(t *testing.T) {
+	ctx := context.Background()
+	conn, err := grpc.DialContext(ctx, "bufnet",
+		grpc.WithContextDialer(bufDialer),
+		grpc.WithInsecure(),
+		withStreamInterceptor(),
+	)
+
+	if err != nil {
+		t.Fatalf("failed to dial bufnet: %v", err)
+	}
+	defer conn.Close()
+
+	client := pb.NewGreeterServiceClient(conn)
+
+	header := metadata.New(map[string]string{"x-response-id": "res-123"})
+	ctx = metadata.NewOutgoingContext(ctx, header)
+	stream, err := client.ListGreetings(ctx, &pb.ListGreetingsRequest{
+		Name: "john",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan bool)
+	go func() {
+		for {
+			res, err := stream.Recv()
+			if err == io.EOF {
+				close(done)
+				break
+			}
+			if err != nil {
+				t.Error(err)
+			}
+
+			t.Log("Got message", res.GetMessage())
+			t.Log(stream.Header())
+			t.Log(stream.Trailer())
+		}
+	}()
+
+	<-done
+}
+
 func TestSayHello(t *testing.T) {
 	ctx := context.Background()
 	conn, err := grpc.DialContext(ctx, "bufnet",
 		grpc.WithContextDialer(bufDialer),
 		grpc.WithInsecure(),
 		withUnaryInterceptor(),
-		withStreamInterceptor(),
 	)
 	if err != nil {
 		t.Fatalf("failed to dial bufnet: %v", err)
@@ -125,11 +170,29 @@ func (s *server) SayHello(ctx context.Context, in *pb.SayHelloRequest) (*pb.SayH
 		return nil, status.Errorf(codes.Internal, "unable to send 'x-response-id' header")
 	}
 	// Uncomment this to return error.
-	return nil, status.Errorf(codes.Internal, "unable to send 'x-response-id' header")
+	//return nil, status.Errorf(codes.Internal, "unable to send 'x-response-id' header")
 
-	//return &pb.SayHelloResponse{
-	//Message: "Hello " + in.GetName(),
-	//}, nil
+	return &pb.SayHelloResponse{
+		Message: "Hello " + in.GetName(),
+	}, nil
+}
+
+func (s *server) ListGreetings(in *pb.ListGreetingsRequest, srv pb.GreeterService_ListGreetingsServer) error {
+	ctx := srv.Context()
+	header := metadata.New(map[string]string{"x-response-id": "res-123"})
+	if err := grpc.SetTrailer(ctx, header); err != nil {
+		return status.Errorf(codes.Internal, "unable to send 'trailer' header")
+	}
+	if err := grpc.SendHeader(ctx, header); err != nil {
+		return status.Errorf(codes.Internal, "unable to send 'x-response-id' header")
+	}
+
+	for i := 0; i < 3; i++ {
+		srv.Send(&pb.ListGreetingsResponse{
+			Message: fmt.Sprintf("hi user%s-%d", in.GetName(), i),
+		})
+	}
+	return nil
 }
 
 func withUnaryInterceptor() grpc.DialOption {
@@ -151,7 +214,7 @@ func withUnaryInterceptor() grpc.DialOption {
 
 func withStreamInterceptor() grpc.DialOption {
 	return grpc.WithStreamInterceptor(grpc.StreamClientInterceptor(func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-		fmt.Println("STREAM INTERCEPTOR")
+		fmt.Println("WITH STREAM INTERCEPTOR")
 		fmt.Println("desc:", desc)
 		fmt.Println("cc:", cc)
 		fmt.Println("method:", method)
@@ -176,6 +239,60 @@ func authorize(ctx context.Context) error {
 	return nil
 }
 
+type sendRecvWrapper struct {
+	grpc.ServerStream
+}
+
+func (s *sendRecvWrapper) SendHeader(md metadata.MD) error {
+	if err := s.ServerStream.SendHeader(md); err != nil {
+		return err
+	}
+	fmt.Println("SendHeader", md)
+	return nil
+}
+
+func (s *sendRecvWrapper) SendMsg(m interface{}) error {
+	if err := s.ServerStream.SendMsg(m); err != nil {
+		return err
+	}
+
+	fmt.Println("SendMsg", m)
+
+	return nil
+
+}
+
+func (s *sendRecvWrapper) RecvMsg(m interface{}) error {
+	if err := s.ServerStream.RecvMsg(m); err != nil {
+		return err
+	}
+
+	fmt.Println("RecvMsg", m)
+
+	return nil
+}
+
+func streamInterceptor() grpc.ServerOption {
+	return grpc.StreamInterceptor(
+		func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+
+			ctx := stream.Context()
+			md, _ := metadata.FromIncomingContext(ctx)
+			fmt.Println()
+			fmt.Println()
+			fmt.Println("SERVER STREAM REQUEST", info.FullMethod, info.IsClientStream, info.IsServerStream)
+			fmt.Println(grpc.MethodFromServerStream(stream))
+			fmt.Println("MD", md)
+
+			err := handler(srv, &sendRecvWrapper{ServerStream: stream})
+
+			fmt.Println("STREAM ERROR", err, grpc.Code(err))
+			fmt.Println()
+			fmt.Println()
+			return err
+		},
+	)
+}
 func unaryInterceptor() grpc.ServerOption {
 	return grpc.UnaryInterceptor(
 		func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
