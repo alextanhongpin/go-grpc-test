@@ -24,9 +24,19 @@ var lis *bufconn.Listener
 
 const addr = "bufnet"
 
-func DialContext(ctx context.Context, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+func DialContext(t *testing.T, ctx context.Context, opts ...grpc.DialOption) *grpc.ClientConn {
+	t.Helper()
+
 	opts = append([]grpc.DialOption{grpc.WithContextDialer(bufDialer)}, opts...)
-	return grpc.DialContext(ctx, addr, opts...)
+	conn, err := grpc.DialContext(ctx, addr, opts...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		conn.Close()
+	})
+
+	return conn
 }
 
 func ListenAndServe(fn func(*grpc.Server), opts ...grpc.ServerOption) func() {
@@ -59,8 +69,7 @@ type Dump struct {
 	Addr       string
 	FullMethod string
 	Header     metadata.MD
-	Request    []any
-	Response   []any
+	Messages   []Message
 	Code       codes.Code     `json:"-"`
 	Status     *status.Status `json:"-"`
 	err        error          `json:"-"`
@@ -68,6 +77,12 @@ type Dump struct {
 	IsStream   bool
 }
 
+// NewRecorder generates a new unique id for the request, and propagates it
+// from the client request to the server.
+// The request/response will then be dumped from the server and set to the
+// global map with this id.
+// The client can then retrieve the dump using the same id.
+// The id is automatically cleaned up after the test is done.
 func NewRecorder(t *testing.T, ctx context.Context) (context.Context, func() *Dump) {
 	t.Helper()
 
@@ -88,11 +103,15 @@ func bufDialer(context.Context, string) (net.Conn, error) {
 	return lis.Dial()
 }
 
+type Message struct {
+	Request  any `json:"request,omitempty"`
+	Response any `json:"response,omitempty"`
+}
+
 type serverStreamWrapper struct {
 	grpc.ServerStream
 	header   metadata.MD
-	sendMsgs []any
-	recvMsgs []any
+	messages []Message
 }
 
 func (s *serverStreamWrapper) SendHeader(md metadata.MD) error {
@@ -108,7 +127,9 @@ func (s *serverStreamWrapper) SendMsg(m interface{}) error {
 		return err
 	}
 
-	s.sendMsgs = append(s.sendMsgs, m)
+	s.messages = append(s.messages, Message{
+		Response: m,
+	})
 
 	return nil
 
@@ -119,7 +140,9 @@ func (s *serverStreamWrapper) RecvMsg(m interface{}) error {
 		return err
 	}
 
-	s.recvMsgs = append(s.recvMsgs, m)
+	s.messages = append(s.messages, Message{
+		Request: m,
+	})
 
 	return nil
 }
@@ -145,8 +168,7 @@ func streamInterceptor() grpc.ServerOption {
 				Addr:       addrFromContext(ctx),
 				FullMethod: info.FullMethod,
 				Header:     header,
-				Request:    w.recvMsgs,
-				Response:   w.sendMsgs,
+				Messages:   w.messages,
 				Code:       grpc.Code(err),
 				Status:     sts,
 				err:        err,
@@ -181,8 +203,7 @@ func unaryInterceptor() grpc.ServerOption {
 				Addr:       addrFromContext(ctx),
 				FullMethod: info.FullMethod,
 				Header:     header,
-				Request:    []any{req},
-				Response:   []any{},
+				Messages:   []Message{{Request: req}, {Response: res}},
 				Code:       code,
 				Status:     sts,
 				err:        err,

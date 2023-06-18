@@ -28,11 +28,7 @@ func TestMain(m *testing.M) {
 
 func TestStreaming(t *testing.T) {
 	ctx := context.Background()
-	conn, err := grpcdump.DialContext(ctx, grpc.WithInsecure())
-	if err != nil {
-		t.Fatalf("failed to dial bufnet: %v", err)
-	}
-	defer conn.Close()
+	conn := grpcdump.DialContext(t, ctx, grpc.WithInsecure())
 
 	// Create a new client.
 	client := pb.NewGreeterServiceClient(conn)
@@ -78,14 +74,7 @@ func TestStreaming(t *testing.T) {
 
 func TestSayHello(t *testing.T) {
 	ctx := context.Background()
-	conn, err := grpcdump.DialContext(ctx,
-		grpc.WithInsecure(),
-	)
-	if err != nil {
-		t.Fatalf("failed to dial bufnet: %v", err)
-	}
-	defer conn.Close()
-
+	conn := grpcdump.DialContext(t, ctx, grpc.WithInsecure())
 	client := pb.NewGreeterServiceClient(conn)
 
 	// Send token.

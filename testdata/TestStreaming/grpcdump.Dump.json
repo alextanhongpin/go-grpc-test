@@ -15,20 +15,26 @@
    "res-123"
   ]
  },
- "Request": [
+ "Messages": [
   {
-   "name": "John Appleseed"
-  }
- ],
- "Response": [
-  {
-   "message": "hi userJohn Appleseed-0"
+   "request": {
+    "name": "John Appleseed"
+   }
   },
   {
-   "message": "hi userJohn Appleseed-1"
+   "response": {
+    "message": "hi userJohn Appleseed-0"
+   }
   },
   {
-   "message": "hi userJohn Appleseed-2"
+   "response": {
+    "message": "hi userJohn Appleseed-1"
+   }
+  },
+  {
+   "response": {
+    "message": "hi userJohn Appleseed-2"
+   }
   }
  ],
  "Error": "",
