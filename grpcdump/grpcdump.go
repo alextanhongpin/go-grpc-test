@@ -68,7 +68,7 @@ type Dump struct {
 	IsStream   bool
 }
 
-func NewRecorder(t *testing.T) func() *Dump {
+func NewRecorder(t *testing.T, ctx context.Context) (context.Context, func() *Dump) {
 	t.Helper()
 
 	// Generate a new unique id per test.
@@ -77,7 +77,9 @@ func NewRecorder(t *testing.T) func() *Dump {
 		delete(testIDs, id)
 	})
 
-	return func() *Dump {
+	ctx = metadata.AppendToOutgoingContext(ctx, "x-test-id", id)
+
+	return ctx, func() *Dump {
 		return testIDs[id]
 	}
 }

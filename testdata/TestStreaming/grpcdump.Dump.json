@@ -1,0 +1,36 @@
+{
+ "Addr": "bufconn",
+ "FullMethod": "/helloworld.v1.GreeterService/ListGreetings",
+ "Header": {
+  ":authority": [
+   "bufnet"
+  ],
+  "content-type": [
+   "application/grpc"
+  ],
+  "user-agent": [
+   "grpc-go/1.55.0"
+  ],
+  "x-response-id": [
+   "res-123"
+  ]
+ },
+ "Request": [
+  {
+   "name": "John Appleseed"
+  }
+ ],
+ "Response": [
+  {
+   "message": "hi userJohn Appleseed-0"
+  },
+  {
+   "message": "hi userJohn Appleseed-1"
+  },
+  {
+   "message": "hi userJohn Appleseed-2"
+  }
+ ],
+ "Error": "",
+ "IsStream": true
+}

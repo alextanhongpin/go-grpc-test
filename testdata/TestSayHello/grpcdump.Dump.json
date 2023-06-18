@@ -1,0 +1,26 @@
+{
+ "Addr": "bufconn",
+ "FullMethod": "/helloworld.v1.GreeterService/SayHello",
+ "Header": {
+  ":authority": [
+   "bufnet"
+  ],
+  "authorization": [
+   "sometoken"
+  ],
+  "content-type": [
+   "application/grpc"
+  ],
+  "user-agent": [
+   "grpc-go/1.55.0"
+  ]
+ },
+ "Request": [
+  {
+   "name": "John Doe"
+  }
+ ],
+ "Response": [],
+ "Error": "rpc error: code = Internal desc = unable to send 'x-response-id' header",
+ "IsStream": false
+}
