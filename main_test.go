@@ -2,6 +2,7 @@ package main_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -23,7 +24,7 @@ import (
 
 const bufSize = 1024 * 1024
 
-var testIDs = make(map[uuid.UUID]*testing.T)
+var testIDs = make(map[uuid.UUID]*grpcDump)
 
 var lis *bufconn.Listener
 
@@ -34,14 +35,21 @@ func TestMain(m *testing.M) {
 		streamInterceptor(),
 	)
 	pb.RegisterGreeterServiceServer(s, &server{})
+	done := make(chan bool)
 	go func() {
-		if err := s.Serve(lis); err != nil {
+		defer close(done)
+		if err := s.Serve(lis); !errors.Is(err, grpc.ErrServerStopped) && err != nil {
+			fmt.Println("ERRR", err, errors.Is(err, grpc.ErrServerStopped))
 			panic(err)
 		}
+		fmt.Println("CLSOING")
 	}()
 
 	code := m.Run()
+	fmt.Println("CODE")
+	s.Stop()
 	lis.Close()
+	<-done
 	os.Exit(code)
 }
 
@@ -104,7 +112,6 @@ func TestSayHello(t *testing.T) {
 	client := pb.NewGreeterServiceClient(conn)
 
 	id := uuid.New()
-	testIDs[id] = t
 	t.Cleanup(func() {
 		delete(testIDs, id)
 	})
@@ -135,6 +142,8 @@ func TestSayHello(t *testing.T) {
 	t.Log("response message:", resp.GetMessage())
 	t.Log("resp:", resp)
 	t.Log("response header:", header)
+
+	testutil.DumpJSON(t, testIDs[id])
 }
 
 type contextKey string
@@ -170,11 +179,11 @@ func (s *server) SayHello(ctx context.Context, in *pb.SayHelloRequest) (*pb.SayH
 		return nil, status.Errorf(codes.Internal, "unable to send 'x-response-id' header")
 	}
 	// Uncomment this to return error.
-	//return nil, status.Errorf(codes.Internal, "unable to send 'x-response-id' header")
+	return nil, status.Errorf(codes.Internal, "unable to send 'x-response-id' header")
 
-	return &pb.SayHelloResponse{
-		Message: "Hello " + in.GetName(),
-	}, nil
+	//return &pb.SayHelloResponse{
+	//Message: "Hello " + in.GetName(),
+	//}, nil
 }
 
 func (s *server) ListGreetings(in *pb.ListGreetingsRequest, srv pb.GreeterService_ListGreetingsServer) error {
@@ -284,15 +293,45 @@ func streamInterceptor() grpc.ServerOption {
 			fmt.Println(grpc.MethodFromServerStream(stream))
 			fmt.Println("MD", md)
 
+			var addr string
+			if pr, ok := peer.FromContext(ctx); ok {
+				if tcpAddr, ok := pr.Addr.(*net.TCPAddr); ok {
+					addr = tcpAddr.IP.String()
+				} else {
+					addr = pr.Addr.String()
+				}
+			}
+
+			fmt.Println("SERVER ADDR", addr)
 			err := handler(srv, &sendRecvWrapper{ServerStream: stream})
 
 			fmt.Println("STREAM ERROR", err, grpc.Code(err))
+
+			sts, ok := status.FromError(err)
+			fmt.Println("sts, ok", sts, ok)
+			fmt.Println("code", sts.Code())
+			fmt.Println("details:", sts.Details())
+			fmt.Println("Err", sts.Err())
+			fmt.Println("msg", sts.Message())
 			fmt.Println()
 			fmt.Println()
 			return err
 		},
 	)
 }
+
+type grpcDump struct {
+	Addr       string
+	FullMethod string
+	Header     metadata.MD
+	Request    []any
+	Response   []any
+	Code       codes.Code
+	Status     *status.Status
+	err        error
+	IsStream   bool
+}
+
 func unaryInterceptor() grpc.ServerOption {
 	return grpc.UnaryInterceptor(
 		func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
@@ -300,21 +339,14 @@ func unaryInterceptor() grpc.ServerOption {
 			if md, ok := metadata.FromIncomingContext(ctx); ok {
 				header = md
 			}
+
 			testID := header.Get("x-test-id")[0]
 			header.Delete("x-test-id")
 			id, err := uuid.Parse(testID)
 			if err != nil {
-				panic("invalid test id")
+				return nil, errors.New("grpcdump: invalid x-test-id")
 			}
-			t := testIDs[id]
 
-			fmt.Println("SERVER REQUEST")
-
-			m := map[string]any{
-				"header":  header,
-				"method":  info.FullMethod,
-				"request": req,
-			}
 			if err := authorize(ctx); err != nil {
 				return nil, err
 			}
@@ -328,25 +360,24 @@ func unaryInterceptor() grpc.ServerOption {
 				}
 			}
 
-			fmt.Println("RESPONSE")
-			h, err := handler(ctx, req)
+			res, err := handler(ctx, req)
 
-			code := grpc.Code(err).String()
-			m["addr"] = addr
-			m["code"] = code
-			if err != nil {
-				m["error"] = struct {
-					Code    string `json:"code"`
-					Message string `json:"message"`
-				}{
-					Code:    code,
-					Message: err.Error(),
-				}
+			code := grpc.Code(err)
+			sts, _ := status.FromError(err)
+
+			testIDs[id] = &grpcDump{
+				Addr:       addr,
+				FullMethod: info.FullMethod,
+				Header:     header,
+				Request:    []any{req},
+				Response:   []any{},
+				Code:       code,
+				Status:     sts,
+				err:        err,
+				IsStream:   false,
 			}
-			m["response"] = h
 
-			testutil.DumpJSON(t, m)
-			return h, err
+			return res, err
 		},
 	)
 }
