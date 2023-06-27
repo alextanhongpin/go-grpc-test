@@ -1,0 +1,35 @@
+{
+ "service": "/helloworld.v1.GreeterService",
+ "method": "SayHello",
+ "messages": [
+  {
+   "message_origin": "client",
+   "message": {
+    "name": "John Doe"
+   }
+  },
+  {
+   "message_origin": "server",
+   "message": null
+  }
+ ],
+ "error": {
+  "code": "Internal",
+  "message": "rpc error: code = Internal desc = unable to send 'x-response-id' header"
+ },
+ "metadata": {
+  ":authority": [
+   "bufnet"
+  ],
+  "authorization": [
+   "sometoken"
+  ],
+  "content-type": [
+   "application/grpc"
+  ],
+  "user-agent": [
+   "grpc-go/1.55.0"
+  ]
+ },
+ "stream": false
+}

@@ -1,0 +1,46 @@
+{
+ "service": "/helloworld.v1.GreeterService",
+ "method": "ListGreetings",
+ "messages": [
+  {
+   "message_origin": "client",
+   "message": {
+    "name": "John Appleseed"
+   }
+  },
+  {
+   "message_origin": "server",
+   "message": {
+    "message": "hi userJohn Appleseed-0"
+   }
+  },
+  {
+   "message_origin": "server",
+   "message": {
+    "message": "hi userJohn Appleseed-1"
+   }
+  },
+  {
+   "message_origin": "server",
+   "message": {
+    "message": "hi userJohn Appleseed-2"
+   }
+  }
+ ],
+ "error": null,
+ "metadata": {
+  ":authority": [
+   "bufnet"
+  ],
+  "content-type": [
+   "application/grpc"
+  ],
+  "user-agent": [
+   "grpc-go/1.55.0"
+  ],
+  "x-response-id": [
+   "res-123"
+  ]
+ },
+ "stream": true
+}

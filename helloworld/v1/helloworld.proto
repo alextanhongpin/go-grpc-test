@@ -13,6 +13,8 @@ service GreeterService {
   rpc SayHello (SayHelloRequest) returns (SayHelloResponse) {}
 
   rpc ListGreetings (ListGreetingsRequest) returns (stream ListGreetingsResponse) {}
+
+  rpc Chat(stream ChatRequest) returns (stream ChatResponse) {}
 }
 
 // The request message containing the user's name.
@@ -30,5 +32,13 @@ message ListGreetingsRequest {
 }
 
 message ListGreetingsResponse {
+  string message = 1;
+}
+
+message ChatRequest {
+  string message = 1;
+}
+
+message ChatResponse {
   string message = 1;
 }

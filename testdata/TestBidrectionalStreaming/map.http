@@ -1,0 +1,24 @@
+GRPC /helloworld.v1.GreeterService/Chat
+:authority: buffnet
+authorization: sometoken
+content-type: application/grpc
+user-agent: grpc-go/1.55.0
+x-response-id: res-123
+
+# Request
+{
+  "name": "John Doe"
+}
+
+# Response
+{
+  "message": "REPLY: foo"
+}
+
+# Error
+{
+  "error": {
+    "code": "",
+    "message": ""
+  }
+}

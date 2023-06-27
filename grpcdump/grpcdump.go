@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"net"
+	"path/filepath"
 	"testing"
 
+	"github.com/alextanhongpin/core/test/testutil"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -16,6 +18,9 @@ import (
 )
 
 const bufSize = 1024 * 1024
+
+const OriginServer = "server"
+const OriginClient = "client"
 
 // NOTE: hackish implementation to extract the dump from the grpc server.
 var testIDs = make(map[string]*Dump)
@@ -65,16 +70,24 @@ func ListenAndServe(fn func(*grpc.Server), opts ...grpc.ServerOption) func() {
 	}
 }
 
+type Error struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+// https://github.com/bradleyjkemp/grpc-tools/blob/master/grpc-dump/README.md
 type Dump struct {
-	Addr       string
-	FullMethod string
-	Header     metadata.MD
-	Messages   []Message
+	Addr       string         `json:"-"`
+	FullMethod string         `json:"-"`
+	Service    string         `json:"service"`
+	Method     string         `json:"method"`
+	Messages   []Message      `json:"messages"`
+	Error      *Error         `json:"error"`
+	Header     metadata.MD    `json:"metadata"`
 	Code       codes.Code     `json:"-"`
 	Status     *status.Status `json:"-"`
 	err        error          `json:"-"`
-	Error      string
-	IsStream   bool
+	IsStream   bool           `json:"stream"`
 }
 
 // NewRecorder generates a new unique id for the request, and propagates it
@@ -83,20 +96,20 @@ type Dump struct {
 // global map with this id.
 // The client can then retrieve the dump using the same id.
 // The id is automatically cleaned up after the test is done.
-func NewRecorder(t *testing.T, ctx context.Context) (context.Context, func() *Dump) {
+func NewRecorder(t *testing.T, ctx context.Context) context.Context {
 	t.Helper()
 
 	// Generate a new unique id per test.
 	id := uuid.New().String()
 	t.Cleanup(func() {
+		dump := testIDs[id]
+		testutil.DumpJSON(t, dump, testutil.FileName(dump.FullMethod))
 		delete(testIDs, id)
 	})
 
 	ctx = metadata.AppendToOutgoingContext(ctx, "x-test-id", id)
 
-	return ctx, func() *Dump {
-		return testIDs[id]
-	}
+	return ctx
 }
 
 func bufDialer(context.Context, string) (net.Conn, error) {
@@ -104,8 +117,8 @@ func bufDialer(context.Context, string) (net.Conn, error) {
 }
 
 type Message struct {
-	Request  any `json:"request,omitempty"`
-	Response any `json:"response,omitempty"`
+	MessageOrigin string `json:"message_origin"` // server or client
+	Message       any    `json:"message"`
 }
 
 type serverStreamWrapper struct {
@@ -128,7 +141,8 @@ func (s *serverStreamWrapper) SendMsg(m interface{}) error {
 	}
 
 	s.messages = append(s.messages, Message{
-		Response: m,
+		MessageOrigin: OriginServer,
+		Message:       m,
 	})
 
 	return nil
@@ -141,7 +155,8 @@ func (s *serverStreamWrapper) RecvMsg(m interface{}) error {
 	}
 
 	s.messages = append(s.messages, Message{
-		Request: m,
+		MessageOrigin: OriginClient,
+		Message:       m,
 	})
 
 	return nil
@@ -167,6 +182,8 @@ func streamInterceptor() grpc.ServerOption {
 			testIDs[id] = &Dump{
 				Addr:       addrFromContext(ctx),
 				FullMethod: info.FullMethod,
+				Service:    filepath.Dir(info.FullMethod),
+				Method:     filepath.Base(info.FullMethod),
 				Header:     header,
 				Messages:   w.messages,
 				Code:       grpc.Code(err),
@@ -202,13 +219,18 @@ func unaryInterceptor() grpc.ServerOption {
 			testIDs[id] = &Dump{
 				Addr:       addrFromContext(ctx),
 				FullMethod: info.FullMethod,
+				Service:    filepath.Dir(info.FullMethod),
+				Method:     filepath.Base(info.FullMethod),
 				Header:     header,
-				Messages:   []Message{{Request: req}, {Response: res}},
-				Code:       code,
-				Status:     sts,
-				err:        err,
-				Error:      errMessage(err),
-				IsStream:   false,
+				Messages: []Message{
+					{MessageOrigin: OriginClient, Message: req},
+					{MessageOrigin: OriginServer, Message: res},
+				},
+				Code:     code,
+				Status:   sts,
+				err:      err,
+				Error:    errMessage(err),
+				IsStream: false,
 			}
 
 			return res, err
@@ -228,10 +250,13 @@ func addrFromContext(ctx context.Context) string {
 	return addr
 }
 
-func errMessage(err error) string {
+func errMessage(err error) *Error {
 	if err == nil {
-		return ""
+		return nil
 	}
 
-	return err.Error()
+	return &Error{
+		Code:    grpc.Code(err).String(),
+		Message: err.Error(),
+	}
 }

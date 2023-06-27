@@ -8,7 +8,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/alextanhongpin/core/test/testutil"
 	"github.com/alextanhongpin/go-grpc-test/grpcdump"
 	pb "github.com/alextanhongpin/go-grpc-test/helloworld/v1"
 	"google.golang.org/grpc"
@@ -26,6 +25,52 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+func TestBidrectionalStreaming(t *testing.T) {
+	ctx := context.Background()
+	conn := grpcdump.DialContext(t, ctx, grpc.WithInsecure())
+
+	// Create a new client.
+	client := pb.NewGreeterServiceClient(conn)
+
+	header := metadata.New(map[string]string{"x-response-id": "res-123"})
+	ctx = metadata.NewOutgoingContext(ctx, header)
+
+	// Create a new recorder.
+	ctx = grpcdump.NewRecorder(t, ctx)
+
+	stream, err := client.Chat(ctx)
+	if err != nil {
+		t.Error(err)
+	}
+
+	done := make(chan bool)
+
+	go func() {
+		for {
+			in, err := stream.Recv()
+			if err == io.EOF {
+				close(done)
+				return
+			}
+			if err != nil {
+				t.Error(err)
+			}
+			t.Log("got msg:", in.GetMessage())
+		}
+	}()
+
+	for _, msg := range []string{"foo", "bar"} {
+		if err := stream.Send(&pb.ChatRequest{
+			Message: msg,
+		}); err != nil {
+			t.Error(err)
+		}
+	}
+	stream.CloseSend()
+
+	<-done
+}
+
 func TestStreaming(t *testing.T) {
 	ctx := context.Background()
 	conn := grpcdump.DialContext(t, ctx, grpc.WithInsecure())
@@ -37,10 +82,7 @@ func TestStreaming(t *testing.T) {
 	ctx = metadata.NewOutgoingContext(ctx, header)
 
 	// Create a new recorder.
-	ctx, rec := grpcdump.NewRecorder(t, ctx)
-	defer func() {
-		testutil.DumpJSON(t, rec())
-	}()
+	ctx = grpcdump.NewRecorder(t, ctx)
 
 	stream, err := client.ListGreetings(ctx, &pb.ListGreetingsRequest{
 		Name: "John Appleseed",
@@ -83,10 +125,7 @@ func TestSayHello(t *testing.T) {
 	})
 	//md := metadata.Pairs("authorization", "sometoken")
 	ctx = metadata.NewOutgoingContext(ctx, md)
-	ctx, rec := grpcdump.NewRecorder(t, ctx)
-	defer func() {
-		testutil.DumpJSON(t, rec())
-	}()
+	ctx = grpcdump.NewRecorder(t, ctx)
 
 	// Anything linked to this variable will fetch response headers.
 	var header metadata.MD
@@ -142,4 +181,24 @@ func (s *server) ListGreetings(in *pb.ListGreetingsRequest, srv pb.GreeterServic
 		})
 	}
 	return nil
+}
+
+func (s *server) Chat(stream pb.GreeterService_ChatServer) error {
+	for {
+		in, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("GOT chat", in.GetMessage())
+
+		if err := stream.Send(&pb.ChatResponse{
+			Message: "REPLY: " + in.GetMessage(),
+		}); err != nil {
+			return err
+		}
+	}
 }
