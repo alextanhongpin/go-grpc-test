@@ -1,6 +1,6 @@
 GRPC /helloworld.v1.GreeterService/Chat
-x-response-id: res-123
 :authority: bufnet
+x-response-id: res-123
 content-type: application/grpc
 user-agent: grpc-go/1.56.1
 

@@ -99,8 +99,8 @@ func bufDialer(context.Context, string) (net.Conn, error) {
 }
 
 type Message struct {
-	MessageOrigin string `json:"message_origin"` // server or client
-	Message       any    `json:"message"`
+	Origin  string `json:"origin"` // server or client
+	Message any    `json:"message"`
 }
 
 type serverStreamWrapper struct {
@@ -123,8 +123,8 @@ func (s *serverStreamWrapper) SendMsg(m interface{}) error {
 	}
 
 	s.messages = append(s.messages, Message{
-		MessageOrigin: OriginServer,
-		Message:       m,
+		Origin:  OriginServer,
+		Message: m,
 	})
 
 	return nil
@@ -137,8 +137,8 @@ func (s *serverStreamWrapper) RecvMsg(m interface{}) error {
 	}
 
 	s.messages = append(s.messages, Message{
-		MessageOrigin: OriginClient,
-		Message:       m,
+		Origin:  OriginClient,
+		Message: m,
 	})
 
 	return nil
@@ -192,8 +192,8 @@ func unaryInterceptor() grpc.ServerOption {
 				FullMethod: info.FullMethod,
 				Metadata:   header,
 				Messages: []Message{
-					{MessageOrigin: OriginClient, Message: req},
-					{MessageOrigin: OriginServer, Message: res},
+					{Origin: OriginClient, Message: req},
+					{Origin: OriginServer, Message: res},
 				},
 				Error: NewError(err),
 			}

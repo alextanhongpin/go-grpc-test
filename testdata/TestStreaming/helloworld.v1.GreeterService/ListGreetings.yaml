@@ -2,16 +2,16 @@ full_method: /helloworld.v1.GreeterService/ListGreetings
 messages:
     - message:
         name: John Appleseed
-      message_origin: client
+      origin: client
     - message:
         message: hi userJohn Appleseed-0
-      message_origin: server
+      origin: server
     - message:
         message: hi userJohn Appleseed-1
-      message_origin: server
+      origin: server
     - message:
         message: hi userJohn Appleseed-2
-      message_origin: server
+      origin: server
 error:
     code: OK
     message: ""

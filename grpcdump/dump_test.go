@@ -21,10 +21,10 @@ func TestDump(t *testing.T) {
 		},
 		Metadata: md,
 		Messages: []grpcdump.Message{
-			{MessageOrigin: grpcdump.OriginClient, Message: map[string]any{
+			{Origin: grpcdump.OriginClient, Message: map[string]any{
 				"msg": "Hello",
 			}},
-			{MessageOrigin: grpcdump.OriginServer, Message: map[string]any{
+			{Origin: grpcdump.OriginServer, Message: map[string]any{
 				"msg": "Hi",
 			}},
 		},

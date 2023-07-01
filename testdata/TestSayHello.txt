@@ -1,7 +1,7 @@
 GRPC /helloworld.v1.GreeterService/SayHello
-authorization: sometoken
 user-agent: grpc-go/1.56.1
 :authority: bufnet
+authorization: sometoken
 content-type: application/grpc
 
 # client

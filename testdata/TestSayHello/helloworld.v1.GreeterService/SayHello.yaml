@@ -2,9 +2,9 @@ full_method: /helloworld.v1.GreeterService/SayHello
 messages:
     - message:
         name: John Doe
-      message_origin: client
+      origin: client
     - message: null
-      message_origin: server
+      origin: server
 error:
     code: Internal
     message: unable to send 'x-response-id' header

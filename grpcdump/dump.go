@@ -113,8 +113,8 @@ func (d *Dump) FromText(b []byte) error {
 				return err
 			}
 			d.Messages = append(d.Messages, Message{
-				MessageOrigin: prefix,
-				Message:       a,
+				Origin:  prefix,
+				Message: a,
 			})
 		case "error":
 			var e Error
@@ -164,7 +164,7 @@ func writeMessages(msgs ...Message) ([]string, error) {
 			return nil, err
 		}
 
-		res[i] = fmt.Sprintf("# %s\n%s\n\n", msg.MessageOrigin, b)
+		res[i] = fmt.Sprintf("# %s\n%s\n\n", msg.Origin, b)
 	}
 
 	return res, nil

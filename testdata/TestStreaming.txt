@@ -1,8 +1,8 @@
 GRPC /helloworld.v1.GreeterService/ListGreetings
-:authority: bufnet
 content-type: application/grpc
-user-agent: grpc-go/1.56.1
 x-response-id: res-123
+:authority: bufnet
+user-agent: grpc-go/1.56.1
 
 # client
 {
