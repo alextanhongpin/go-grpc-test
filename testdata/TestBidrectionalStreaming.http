@@ -1,34 +1,34 @@
-GRPC /helloworld.v1.GreeterService/Chat
+GRPC bufconn/helloworld.v1.GreeterService/Chat
+content-type: application/grpc
 :authority: bufnet
 x-response-id: res-123
-content-type: application/grpc
 user-agent: grpc-go/1.56.1
 
-# client
+=== client
 {
  "message": "foo"
 }
 
 
-# server
+=== server
 {
  "message": "REPLY: foo"
 }
 
 
-# client
+=== client
 {
  "message": "bar"
 }
 
 
-# server
+=== server
 {
  "message": "REPLY: bar"
 }
 
 
-# error
+=== status
 {
  "code": "OK",
  "message": ""

@@ -1,3 +1,4 @@
+addr: bufconn
 full_method: /helloworld.v1.GreeterService/ListGreetings
 messages:
     - message:
@@ -12,7 +13,7 @@ messages:
     - message:
         message: hi userJohn Appleseed-2
       origin: server
-error:
+status:
     code: OK
     message: ""
 metadata:

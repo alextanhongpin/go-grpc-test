@@ -1,34 +1,34 @@
-GRPC /helloworld.v1.GreeterService/ListGreetings
-content-type: application/grpc
-x-response-id: res-123
+GRPC bufconn/helloworld.v1.GreeterService/ListGreetings
 :authority: bufnet
 user-agent: grpc-go/1.56.1
+x-response-id: res-123
+content-type: application/grpc
 
-# client
+=== client
 {
  "name": "John Appleseed"
 }
 
 
-# server
+=== server
 {
  "message": "hi userJohn Appleseed-0"
 }
 
 
-# server
+=== server
 {
  "message": "hi userJohn Appleseed-1"
 }
 
 
-# server
+=== server
 {
  "message": "hi userJohn Appleseed-2"
 }
 
 
-# error
+=== status
 {
  "code": "OK",
  "message": ""

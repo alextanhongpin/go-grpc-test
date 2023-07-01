@@ -14,8 +14,9 @@ func TestDump(t *testing.T) {
 	})
 
 	d := &grpcdump.Dump{
+		Addr:       "bufconn",
 		FullMethod: "/helloworld.v1.GreeterService/Chat",
-		Error: &grpcdump.Error{
+		Status: &grpcdump.Status{
 			Code:    codes.Unauthenticated.String(),
 			Message: "not authenticated",
 		},

@@ -12,13 +12,22 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+const (
+	headerPrefix = "GRPC "
+	separator    = "=== "
+	statusPrefix = "=== status"
+	clientPrefix = "=== client"
+	serverPrefix = "=== server"
+)
+
 var ErrInvalidDumpFormat = errors.New("grpcdump: invalid dump format")
 
 // https://github.com/bradleyjkemp/grpc-tools/blob/master/grpc-dump/README.md
 type Dump struct {
+	Addr       string      `json:"addr"`
 	FullMethod string      `json:"full_method"`
 	Messages   []Message   `json:"messages"`
-	Error      *Error      `json:"error"`
+	Status     *Status     `json:"status"`
 	Metadata   metadata.MD `json:"metadata"`
 }
 
@@ -32,7 +41,7 @@ func (d *Dump) Method() string {
 
 func (d *Dump) AsText() ([]byte, error) {
 	rows := []string{
-		writeMethod(d.FullMethod),
+		writeMethod(d.Addr, d.FullMethod),
 		writeMetadata(d.Metadata),
 		"",
 	}
@@ -43,7 +52,7 @@ func (d *Dump) AsText() ([]byte, error) {
 	}
 	rows = append(rows, msgs...)
 
-	errs, err := writeError(d.Error)
+	errs, err := writeStatus(d.Status)
 	if err != nil {
 		return nil, err
 	}
@@ -60,11 +69,11 @@ func (d *Dump) FromText(b []byte) error {
 	scanner := bufio.NewScanner(bytes.NewReader(b))
 	for scanner.Scan() {
 		header := scanner.Text()
-		if !strings.HasPrefix(header, "GRPC ") {
+		if !strings.HasPrefix(header, headerPrefix) {
 			return fmt.Errorf("%w: invalid line %q", ErrInvalidDumpFormat, header)
 		}
 
-		d.FullMethod = strings.TrimPrefix(header, "GRPC ")
+		d.FullMethod = strings.TrimPrefix(header, headerPrefix)
 		break
 	}
 
@@ -87,11 +96,9 @@ func (d *Dump) FromText(b []byte) error {
 	var sb strings.Builder
 	for scanner.Scan() {
 		text := scanner.Text()
-		if !strings.HasPrefix(text, "#") {
+		if !strings.HasPrefix(text, separator) {
 			continue
 		}
-
-		prefix := strings.TrimPrefix(text, "# ")
 
 		sb.Reset()
 		for scanner.Scan() {
@@ -104,31 +111,36 @@ func (d *Dump) FromText(b []byte) error {
 		}
 
 		b := []byte(sb.String())
-		switch prefix {
+		switch text {
 		case
-			OriginClient,
-			OriginServer:
+			clientPrefix,
+			serverPrefix:
+
 			var a any
 			if err := json.Unmarshal(b, &a); err != nil {
 				return err
 			}
+
+			origin := strings.TrimPrefix(text, separator)
+
 			d.Messages = append(d.Messages, Message{
-				Origin:  prefix,
+				Origin:  origin,
 				Message: a,
 			})
-		case "error":
-			var e Error
+		case statusPrefix:
+			var e Status
 			if err := json.Unmarshal(b, &e); err != nil {
 				return err
 			}
-			d.Error = &e
+
+			d.Status = &e
 		}
 	}
 
 	return nil
 }
 
-func writeError(e *Error) ([]string, error) {
+func writeStatus(e *Status) ([]string, error) {
 	if e == nil {
 		return nil, nil
 	}
@@ -138,11 +150,11 @@ func writeError(e *Error) ([]string, error) {
 		return nil, err
 	}
 
-	return []string{fmt.Sprintf("# error\n%s\n", b)}, nil
+	return []string{fmt.Sprintf("%s\n%s\n", statusPrefix, b)}, nil
 }
 
-func writeMethod(fullMethod string) string {
-	return fmt.Sprintf("GRPC %s", fullMethod)
+func writeMethod(addr, fullMethod string) string {
+	return fmt.Sprintf("%s%s", headerPrefix, filepath.Join(addr, fullMethod))
 }
 
 func writeMetadata(md metadata.MD) string {
@@ -164,7 +176,11 @@ func writeMessages(msgs ...Message) ([]string, error) {
 			return nil, err
 		}
 
-		res[i] = fmt.Sprintf("# %s\n%s\n\n", msg.Origin, b)
+		if msg.Origin == OriginServer {
+			res[i] = fmt.Sprintf("%s\n%s\n\n", serverPrefix, b)
+		} else {
+			res[i] = fmt.Sprintf("%s\n%s\n\n", clientPrefix, b)
+		}
 	}
 
 	return res, nil

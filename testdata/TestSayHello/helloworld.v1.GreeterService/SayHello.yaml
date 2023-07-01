@@ -1,11 +1,10 @@
+addr: bufconn
 full_method: /helloworld.v1.GreeterService/SayHello
 messages:
     - message:
         name: John Doe
       origin: client
-    - message: null
-      origin: server
-error:
+status:
     code: Internal
     message: unable to send 'x-response-id' header
 metadata:

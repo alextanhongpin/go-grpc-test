@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/test/bufconn"
 )
 
@@ -161,10 +162,11 @@ func streamInterceptor() grpc.ServerOption {
 			err := handler(srv, w)
 
 			testIDs[id] = &Dump{
+				Addr:       addrFromContext(ctx),
 				FullMethod: info.FullMethod,
 				Metadata:   header,
 				Messages:   w.messages,
-				Error:      NewError(err),
+				Status:     NewStatus(err),
 			}
 
 			return err
@@ -187,18 +189,37 @@ func unaryInterceptor() grpc.ServerOption {
 			header.Delete("x-test-id")
 
 			res, err := handler(ctx, req)
+			messages := []Message{
+				{Origin: OriginClient, Message: req},
+			}
+			if err == nil {
+				messages = append(messages, Message{
+					Origin:  OriginServer,
+					Message: res,
+				})
+			}
 
 			testIDs[id] = &Dump{
+				Addr:       addrFromContext(ctx),
 				FullMethod: info.FullMethod,
 				Metadata:   header,
-				Messages: []Message{
-					{Origin: OriginClient, Message: req},
-					{Origin: OriginServer, Message: res},
-				},
-				Error: NewError(err),
+				Messages:   messages,
+				Status:     NewStatus(err),
 			}
 
 			return res, err
 		},
 	)
+}
+
+func addrFromContext(ctx context.Context) string {
+	var addr string
+	if pr, ok := peer.FromContext(ctx); ok {
+		if tcpAddr, ok := pr.Addr.(*net.TCPAddr); ok {
+			addr = tcpAddr.IP.String()
+		} else {
+			addr = pr.Addr.String()
+		}
+	}
+	return addr
 }
