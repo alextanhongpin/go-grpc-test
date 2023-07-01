@@ -83,3 +83,55 @@ func authorize(ctx context.Context) error {
 	return nil
 }
 ```
+
+## Setting trailer and header from server
+
+
+Trailer:
+```go
+	header := metadata.New(map[string]string{"x-response-id": "res-123"})
+	if err := grpc.SetTrailer(ctx, header); err != nil {
+		return status.Errorf(codes.Internal, "unable to send 'trailer' header")
+	}
+```
+
+Header:
+```go
+	header := metadata.New(map[string]string{"x-response-id": "res-123"})
+	if err := grpc.SendHeader(ctx, header); err != nil {
+		return status.Errorf(codes.Internal, "unable to send 'x-response-id' header")
+	}
+```
+
+## Setting header from client
+
+```go
+	// Create a new client.
+	client := pb.NewGreeterServiceClient(conn)
+
+	header := metadata.New(map[string]string{"authorization": "xyz"})
+	ctx = metadata.NewOutgoingContext(ctx, header)
+
+	stream, err := client.Chat(ctx)
+```
+
+## Handling error
+
+```go
+		sts, ok := status.FromError(err)
+		fmt.Println(ok)
+		fmt.Println(sts.Code())
+		fmt.Println(sts.Details())
+		fmt.Println(sts.Err())
+		fmt.Println(sts.Message())
+		fmt.Println(grpc.ErrorDesc(err))
+```
+
+## Client get header (unidirectional)
+
+```go
+	var header metadata.MD
+	resp, err := client.SayHello(ctx, &pb.SayHelloRequest{
+		Name: "John Doe",
+	}, grpc.Header(&header))
+```

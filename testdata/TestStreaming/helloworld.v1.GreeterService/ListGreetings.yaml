@@ -5,13 +5,13 @@ messages:
         name: John Appleseed
       origin: client
     - message:
-        message: hi userJohn Appleseed-0
+        message: Hi John Appleseed-0
       origin: server
     - message:
-        message: hi userJohn Appleseed-1
+        message: Hi John Appleseed-1
       origin: server
     - message:
-        message: hi userJohn Appleseed-2
+        message: Hi John Appleseed-2
       origin: server
 status:
     code: OK
@@ -23,5 +23,3 @@ metadata:
         - application/grpc
     user-agent:
         - grpc-go/1.56.1
-    x-response-id:
-        - res-123

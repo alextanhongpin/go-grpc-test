@@ -1,17 +1,11 @@
 addr: bufconn
-full_method: /helloworld.v1.GreeterService/Chat
+full_method: /helloworld.v1.GreeterService/SayHello
 messages:
     - message:
-        message: foo
+        name: John Doe
       origin: client
     - message:
-        message: 'REPLY: foo'
-      origin: server
-    - message:
-        message: bar
-      origin: client
-    - message:
-        message: 'REPLY: bar'
+        message: Hello John Doe
       origin: server
 status:
     code: OK
@@ -19,6 +13,8 @@ status:
 metadata:
     :authority:
         - bufnet
+    authorization:
+        - xyz
     content-type:
         - application/grpc
     user-agent:

@@ -1,8 +1,8 @@
 GRPC bufconn/helloworld.v1.GreeterService/SayHello
-:authority: bufnet
-authorization: sometoken
-content-type: application/grpc
 user-agent: grpc-go/1.56.1
+:authority: bufnet
+authorization: xyz
+content-type: application/grpc
 
 === client
 {
@@ -10,8 +10,14 @@ user-agent: grpc-go/1.56.1
 }
 
 
+=== server
+{
+ "message": "Hello John Doe"
+}
+
+
 === status
 {
- "code": "Internal",
- "message": "unable to send 'x-response-id' header"
+ "code": "OK",
+ "message": ""
 }

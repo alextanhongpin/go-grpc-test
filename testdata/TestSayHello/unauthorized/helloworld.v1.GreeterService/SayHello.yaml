@@ -5,13 +5,13 @@ messages:
         name: John Doe
       origin: client
 status:
-    code: Internal
-    message: unable to send 'x-response-id' header
+    code: Unauthenticated
+    message: no token present
 metadata:
     :authority:
         - bufnet
     authorization:
-        - sometoken
+        - abc
     content-type:
         - application/grpc
     user-agent:

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"testing"
 
@@ -33,9 +32,6 @@ func TestBidrectionalStreaming(t *testing.T) {
 	// Create a new client.
 	client := pb.NewGreeterServiceClient(conn)
 
-	header := metadata.New(map[string]string{"x-response-id": "res-123"})
-	ctx = metadata.NewOutgoingContext(ctx, header)
-
 	// Create a new recorder.
 	ctx = dumpGRPC(t, ctx)
 
@@ -48,7 +44,7 @@ func TestBidrectionalStreaming(t *testing.T) {
 
 	go func() {
 		for {
-			in, err := stream.Recv()
+			_, err := stream.Recv()
 			if err == io.EOF {
 				close(done)
 				return
@@ -56,7 +52,6 @@ func TestBidrectionalStreaming(t *testing.T) {
 			if err != nil {
 				t.Error(err)
 			}
-			t.Log("got msg:", in.GetMessage())
 		}
 	}()
 
@@ -79,9 +74,6 @@ func TestStreaming(t *testing.T) {
 	// Create a new client.
 	client := pb.NewGreeterServiceClient(conn)
 
-	header := metadata.New(map[string]string{"x-response-id": "res-123"})
-	ctx = metadata.NewOutgoingContext(ctx, header)
-
 	// Create a new recorder.
 	ctx = dumpGRPC(t, ctx)
 
@@ -97,7 +89,7 @@ func TestStreaming(t *testing.T) {
 	go func() {
 		defer close(done)
 		for {
-			res, err := stream.Recv()
+			_, err := stream.Recv()
 			if err == io.EOF {
 				break
 			}
@@ -106,7 +98,6 @@ func TestStreaming(t *testing.T) {
 				t.Error(err)
 			}
 
-			t.Log("Got message", res.GetMessage())
 			t.Log(stream.Header())
 			t.Log(stream.Trailer())
 		}
@@ -117,35 +108,48 @@ func TestStreaming(t *testing.T) {
 
 func TestSayHello(t *testing.T) {
 	ctx := context.Background()
-	conn := grpcDialContext(t, ctx)
-	client := pb.NewGreeterServiceClient(conn)
 
-	// Send token.
-	md := metadata.New(map[string]string{
-		"authorization": "sometoken",
+	t.Run("success", func(t *testing.T) {
+		conn := grpcDialContext(t, ctx)
+		client := pb.NewGreeterServiceClient(conn)
+		// Send token.
+		md := metadata.New(map[string]string{
+			"authorization": "xyz",
+		})
+
+		//md := metadata.Pairs("authorization", "sometoken")
+		ctx = metadata.NewOutgoingContext(ctx, md)
+		ctx = dumpGRPC(t, ctx)
+
+		// Anything linked to this variable will fetch response headers.
+		_, err := client.SayHello(ctx, &pb.SayHelloRequest{
+			Name: "John Doe",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
 	})
-	//md := metadata.Pairs("authorization", "sometoken")
-	ctx = metadata.NewOutgoingContext(ctx, md)
-	ctx = dumpGRPC(t, ctx)
 
-	// Anything linked to this variable will fetch response headers.
-	var header metadata.MD
-	resp, err := client.SayHello(ctx, &pb.SayHelloRequest{
-		Name: "John Doe",
-	}, grpc.Header(&header))
-	if err != nil {
-		sts, ok := status.FromError(err)
-		fmt.Println(ok)
-		fmt.Println(sts.Code())
-		fmt.Println(sts.Details())
-		fmt.Println(sts.Err())
-		fmt.Println(sts.Message())
-		fmt.Println(grpc.ErrorDesc(err))
-		t.Errorf("SayHello failed: %v", err)
-	}
-	t.Log("response message:", resp.GetMessage())
-	t.Log("resp:", resp)
-	t.Log("response header:", header)
+	t.Run("unauthorized", func(t *testing.T) {
+		conn := grpcDialContext(t, ctx)
+		client := pb.NewGreeterServiceClient(conn)
+		// Send token.
+		md := metadata.New(map[string]string{
+			"authorization": "abc",
+		})
+
+		//md := metadata.Pairs("authorization", "sometoken")
+		ctx = metadata.NewOutgoingContext(ctx, md)
+		ctx = dumpGRPC(t, ctx)
+
+		// Anything linked to this variable will fetch response headers.
+		_, err := client.SayHello(ctx, &pb.SayHelloRequest{
+			Name: "John Doe",
+		})
+		if err != nil {
+			t.Errorf("SayHello failed: %v", err)
+		}
+	})
 }
 
 type server struct {
@@ -154,31 +158,23 @@ type server struct {
 
 // SayHello implements helloworld.GreeterServer
 func (s *server) SayHello(ctx context.Context, in *pb.SayHelloRequest) (*pb.SayHelloResponse, error) {
-	log.Printf("Received: %v", in.GetName())
-
-	// Anything linked to this variable will transmit response headers.
-	header := metadata.New(map[string]string{"x-response-id": "res-123"})
-	if err := grpc.SendHeader(ctx, header); err != nil {
-		return nil, status.Errorf(codes.Internal, "unable to send 'x-response-id' header")
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "no token present")
 	}
-	// Uncomment this to return error.
-	return nil, status.Errorf(codes.Internal, "unable to send 'x-response-id' header")
-	//return &pb.SayHelloResponse{Message: "Hello " + in.GetName()}, nil
+
+	token := md.Get("authorization")[0]
+	if token != "xyz" {
+		return nil, status.Error(codes.Unauthenticated, "no token present")
+	}
+
+	return &pb.SayHelloResponse{Message: "Hello " + in.GetName()}, nil
 }
 
 func (s *server) ListGreetings(in *pb.ListGreetingsRequest, srv pb.GreeterService_ListGreetingsServer) error {
-	ctx := srv.Context()
-	header := metadata.New(map[string]string{"x-response-id": "res-123"})
-	if err := grpc.SetTrailer(ctx, header); err != nil {
-		return status.Errorf(codes.Internal, "unable to send 'trailer' header")
-	}
-	if err := grpc.SendHeader(ctx, header); err != nil {
-		return status.Errorf(codes.Internal, "unable to send 'x-response-id' header")
-	}
-
 	for i := 0; i < 3; i++ {
 		srv.Send(&pb.ListGreetingsResponse{
-			Message: fmt.Sprintf("hi user%s-%d", in.GetName(), i),
+			Message: fmt.Sprintf("Hi %s-%d", in.GetName(), i),
 		})
 	}
 	return nil
@@ -193,8 +189,6 @@ func (s *server) Chat(stream pb.GreeterService_ChatServer) error {
 		if err != nil {
 			return err
 		}
-
-		fmt.Println("GOT chat", in.GetMessage())
 
 		if err := stream.Send(&pb.ChatResponse{
 			Message: "REPLY: " + in.GetMessage(),

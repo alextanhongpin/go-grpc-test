@@ -1,0 +1,17 @@
+GRPC bufconn/helloworld.v1.GreeterService/SayHello
+:authority: bufnet
+content-type: application/grpc
+user-agent: grpc-go/1.56.1
+authorization: abc
+
+=== client
+{
+ "name": "John Doe"
+}
+
+
+=== status
+{
+ "code": "Unauthenticated",
+ "message": "no token present"
+}
