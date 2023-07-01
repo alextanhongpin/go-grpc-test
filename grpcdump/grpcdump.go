@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
-	"testing"
 
-	"github.com/alextanhongpin/core/test/testutil"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -26,19 +24,13 @@ var lis *bufconn.Listener
 
 const addr = "bufnet"
 
-func DialContext(t *testing.T, ctx context.Context, opts ...grpc.DialOption) *grpc.ClientConn {
-	t.Helper()
-
+func DialContext(ctx context.Context, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	opts = append([]grpc.DialOption{grpc.WithContextDialer(bufDialer)}, opts...)
 	conn, err := grpc.DialContext(ctx, addr, opts...)
 	if err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
-	t.Cleanup(func() {
-		conn.Close()
-	})
-
-	return conn
+	return conn, nil
 }
 
 func ListenAndServe(fn func(*grpc.Server), opts ...grpc.ServerOption) func() {
@@ -73,26 +65,18 @@ func ListenAndServe(fn func(*grpc.Server), opts ...grpc.ServerOption) func() {
 // global map with this id.
 // The client can then retrieve the dump using the same id.
 // The id is automatically cleaned up after the test is done.
-func NewRecorder(t *testing.T, ctx context.Context) context.Context {
-	t.Helper()
-
+func NewRecorder(ctx context.Context) (context.Context, func() *Dump) {
 	// Generate a new unique id per test.
 	id := uuid.New().String()
-	t.Cleanup(func() {
-		dump := testIDs[id]
-		testutil.DumpYAML(t, dump, testutil.FileName(dump.FullMethod))
-
-		b, err := dump.AsText()
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.DumpText(t, string(b))
-		delete(testIDs, id)
-	})
 
 	ctx = metadata.AppendToOutgoingContext(ctx, "x-test-id", id)
 
-	return ctx
+	return ctx, func() *Dump {
+		dump := testIDs[id]
+		delete(testIDs, id)
+
+		return dump
+	}
 }
 
 func bufDialer(context.Context, string) (net.Conn, error) {

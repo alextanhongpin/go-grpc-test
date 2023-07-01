@@ -8,6 +8,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/alextanhongpin/core/test/testutil"
 	"github.com/alextanhongpin/go-grpc-test/grpcdump"
 	pb "github.com/alextanhongpin/go-grpc-test/helloworld/v1"
 	"google.golang.org/grpc"
@@ -27,7 +28,7 @@ func TestMain(m *testing.M) {
 
 func TestBidrectionalStreaming(t *testing.T) {
 	ctx := context.Background()
-	conn := grpcdump.DialContext(t, ctx, grpc.WithInsecure())
+	conn := grpcDialContext(t, ctx)
 
 	// Create a new client.
 	client := pb.NewGreeterServiceClient(conn)
@@ -36,7 +37,7 @@ func TestBidrectionalStreaming(t *testing.T) {
 	ctx = metadata.NewOutgoingContext(ctx, header)
 
 	// Create a new recorder.
-	ctx = grpcdump.NewRecorder(t, ctx)
+	ctx = dumpGRPC(t, ctx)
 
 	stream, err := client.Chat(ctx)
 	if err != nil {
@@ -73,7 +74,7 @@ func TestBidrectionalStreaming(t *testing.T) {
 
 func TestStreaming(t *testing.T) {
 	ctx := context.Background()
-	conn := grpcdump.DialContext(t, ctx, grpc.WithInsecure())
+	conn := grpcDialContext(t, ctx)
 
 	// Create a new client.
 	client := pb.NewGreeterServiceClient(conn)
@@ -82,7 +83,7 @@ func TestStreaming(t *testing.T) {
 	ctx = metadata.NewOutgoingContext(ctx, header)
 
 	// Create a new recorder.
-	ctx = grpcdump.NewRecorder(t, ctx)
+	ctx = dumpGRPC(t, ctx)
 
 	stream, err := client.ListGreetings(ctx, &pb.ListGreetingsRequest{
 		Name: "John Appleseed",
@@ -116,7 +117,7 @@ func TestStreaming(t *testing.T) {
 
 func TestSayHello(t *testing.T) {
 	ctx := context.Background()
-	conn := grpcdump.DialContext(t, ctx, grpc.WithInsecure())
+	conn := grpcDialContext(t, ctx)
 	client := pb.NewGreeterServiceClient(conn)
 
 	// Send token.
@@ -125,7 +126,7 @@ func TestSayHello(t *testing.T) {
 	})
 	//md := metadata.Pairs("authorization", "sometoken")
 	ctx = metadata.NewOutgoingContext(ctx, md)
-	ctx = grpcdump.NewRecorder(t, ctx)
+	ctx = dumpGRPC(t, ctx)
 
 	// Anything linked to this variable will fetch response headers.
 	var header metadata.MD
@@ -201,4 +202,37 @@ func (s *server) Chat(stream pb.GreeterService_ChatServer) error {
 			return err
 		}
 	}
+}
+
+func dumpGRPC(t *testing.T, ctx context.Context) context.Context {
+	t.Helper()
+	ctx, flush := grpcdump.NewRecorder(ctx)
+
+	t.Cleanup(func() {
+		dump := flush()
+
+		testutil.DumpYAML(t, dump, testutil.FileName(dump.FullMethod))
+
+		b, err := dump.AsText()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		testutil.DumpText(t, string(b))
+	})
+
+	return ctx
+}
+
+func grpcDialContext(t *testing.T, ctx context.Context) *grpc.ClientConn {
+	conn, err := grpcdump.DialContext(ctx, grpc.WithInsecure())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		conn.Close()
+	})
+
+	return conn
 }
