@@ -1,0 +1,19 @@
+full_method: /helloworld.v1.GreeterService/SayHello
+messages:
+    - message:
+        name: John Doe
+      message_origin: client
+    - message: null
+      message_origin: server
+error:
+    code: Internal
+    message: unable to send 'x-response-id' header
+metadata:
+    :authority:
+        - bufnet
+    authorization:
+        - sometoken
+    content-type:
+        - application/grpc
+    user-agent:
+        - grpc-go/1.56.1

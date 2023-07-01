@@ -1,0 +1,26 @@
+full_method: /helloworld.v1.GreeterService/Chat
+messages:
+    - message:
+        message: foo
+      message_origin: client
+    - message:
+        message: 'REPLY: foo'
+      message_origin: server
+    - message:
+        message: bar
+      message_origin: client
+    - message:
+        message: 'REPLY: bar'
+      message_origin: server
+error:
+    code: OK
+    message: ""
+metadata:
+    :authority:
+        - bufnet
+    content-type:
+        - application/grpc
+    user-agent:
+        - grpc-go/1.56.1
+    x-response-id:
+        - res-123

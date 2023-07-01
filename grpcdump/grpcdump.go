@@ -4,16 +4,12 @@ import (
 	"context"
 	"errors"
 	"net"
-	"path/filepath"
 	"testing"
 
 	"github.com/alextanhongpin/core/test/testutil"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 )
 
@@ -70,26 +66,6 @@ func ListenAndServe(fn func(*grpc.Server), opts ...grpc.ServerOption) func() {
 	}
 }
 
-type Error struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-}
-
-// https://github.com/bradleyjkemp/grpc-tools/blob/master/grpc-dump/README.md
-type Dump struct {
-	Addr       string         `json:"-"`
-	FullMethod string         `json:"-"`
-	Service    string         `json:"service"`
-	Method     string         `json:"method"`
-	Messages   []Message      `json:"messages"`
-	Error      *Error         `json:"error"`
-	Header     metadata.MD    `json:"metadata"`
-	Code       codes.Code     `json:"-"`
-	Status     *status.Status `json:"-"`
-	err        error          `json:"-"`
-	IsStream   bool           `json:"stream"`
-}
-
 // NewRecorder generates a new unique id for the request, and propagates it
 // from the client request to the server.
 // The request/response will then be dumped from the server and set to the
@@ -103,7 +79,13 @@ func NewRecorder(t *testing.T, ctx context.Context) context.Context {
 	id := uuid.New().String()
 	t.Cleanup(func() {
 		dump := testIDs[id]
-		testutil.DumpJSON(t, dump, testutil.FileName(dump.FullMethod))
+		testutil.DumpYAML(t, dump, testutil.FileName(dump.FullMethod))
+
+		b, err := dump.AsText()
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.DumpText(t, string(b))
 		delete(testIDs, id)
 	})
 
@@ -177,20 +159,12 @@ func streamInterceptor() grpc.ServerOption {
 
 			w := &serverStreamWrapper{ServerStream: stream}
 			err := handler(srv, w)
-			sts, _ := status.FromError(err)
 
 			testIDs[id] = &Dump{
-				Addr:       addrFromContext(ctx),
 				FullMethod: info.FullMethod,
-				Service:    filepath.Dir(info.FullMethod),
-				Method:     filepath.Base(info.FullMethod),
-				Header:     header,
+				Metadata:   header,
 				Messages:   w.messages,
-				Code:       grpc.Code(err),
-				Status:     sts,
-				err:        err,
-				Error:      errMessage(err),
-				IsStream:   true,
+				Error:      NewError(err),
 			}
 
 			return err
@@ -213,50 +187,18 @@ func unaryInterceptor() grpc.ServerOption {
 			header.Delete("x-test-id")
 
 			res, err := handler(ctx, req)
-			sts, _ := status.FromError(err)
-			code := grpc.Code(err)
 
 			testIDs[id] = &Dump{
-				Addr:       addrFromContext(ctx),
 				FullMethod: info.FullMethod,
-				Service:    filepath.Dir(info.FullMethod),
-				Method:     filepath.Base(info.FullMethod),
-				Header:     header,
+				Metadata:   header,
 				Messages: []Message{
 					{MessageOrigin: OriginClient, Message: req},
 					{MessageOrigin: OriginServer, Message: res},
 				},
-				Code:     code,
-				Status:   sts,
-				err:      err,
-				Error:    errMessage(err),
-				IsStream: false,
+				Error: NewError(err),
 			}
 
 			return res, err
 		},
 	)
-}
-
-func addrFromContext(ctx context.Context) string {
-	var addr string
-	if pr, ok := peer.FromContext(ctx); ok {
-		if tcpAddr, ok := pr.Addr.(*net.TCPAddr); ok {
-			addr = tcpAddr.IP.String()
-		} else {
-			addr = pr.Addr.String()
-		}
-	}
-	return addr
-}
-
-func errMessage(err error) *Error {
-	if err == nil {
-		return nil
-	}
-
-	return &Error{
-		Code:    grpc.Code(err).String(),
-		Message: err.Error(),
-	}
 }

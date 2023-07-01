@@ -1,0 +1,35 @@
+GRPC /helloworld.v1.GreeterService/ListGreetings
+:authority: bufnet
+content-type: application/grpc
+user-agent: grpc-go/1.56.1
+x-response-id: res-123
+
+# client
+{
+ "name": "John Appleseed"
+}
+
+
+# server
+{
+ "message": "hi userJohn Appleseed-0"
+}
+
+
+# server
+{
+ "message": "hi userJohn Appleseed-1"
+}
+
+
+# server
+{
+ "message": "hi userJohn Appleseed-2"
+}
+
+
+# error
+{
+ "code": "OK",
+ "message": ""
+}
