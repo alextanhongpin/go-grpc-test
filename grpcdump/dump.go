@@ -28,7 +28,8 @@ type Dump struct {
 	FullMethod string      `json:"full_method"`
 	Messages   []Message   `json:"messages"`
 	Status     *Status     `json:"status"`
-	Metadata   metadata.MD `json:"metadata"`
+	Header     metadata.MD `json:"header"`
+	Trailer    metadata.MD `json:"trailer"`
 }
 
 func (d *Dump) Service() string {
@@ -42,7 +43,7 @@ func (d *Dump) Method() string {
 func (d *Dump) AsText() ([]byte, error) {
 	rows := []string{
 		writeMethod(d.Addr, d.FullMethod),
-		writeMetadata(d.Metadata),
+		writeMetadata(d.Header),
 		"",
 	}
 
@@ -91,7 +92,7 @@ func (d *Dump) FromText(b []byte) error {
 		}
 		m[k] = v
 	}
-	d.Metadata = metadata.New(m)
+	d.Header = metadata.New(m)
 
 	var sb strings.Builder
 	for scanner.Scan() {

@@ -12,6 +12,10 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 )
 
+// TODO: Separate grpctest and grpcdump
+// Update unary client to accept calloptions to extract header.
+// Add metadata and trailers
+
 const bufSize = 1024 * 1024
 
 const OriginServer = "server"
@@ -92,6 +96,13 @@ type serverStreamWrapper struct {
 	grpc.ServerStream
 	header   metadata.MD
 	messages []Message
+	trailer  metadata.MD
+}
+
+func (s *serverStreamWrapper) SetTrailer(md metadata.MD) {
+	s.ServerStream.SetTrailer(md)
+
+	s.trailer = metadata.Join(s.trailer, md)
 }
 
 func (s *serverStreamWrapper) SendHeader(md metadata.MD) error {
@@ -99,6 +110,7 @@ func (s *serverStreamWrapper) SendHeader(md metadata.MD) error {
 		return err
 	}
 	s.header = md
+
 	return nil
 }
 

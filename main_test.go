@@ -198,6 +198,27 @@ func (s *server) Chat(stream pb.GreeterService_ChatServer) error {
 	}
 }
 
+func dumpGRPCUnary(t *testing.T, ctx context.Context) (context.Context, []grpc.CallOption) {
+	t.Helper()
+	ctx, flush := grpcdump.NewRecorder(ctx)
+
+	var trailer, header metadata.MD
+	t.Cleanup(func() {
+		dump := flush()
+
+		testutil.DumpYAML(t, dump, testutil.FileName(dump.FullMethod))
+
+		b, err := dump.AsText()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		testutil.DumpText(t, string(b))
+	})
+
+	return ctx, []grpc.CallOption{grpc.Header(&header), grpc.Trailer(&trailer)}
+}
+
 func dumpGRPC(t *testing.T, ctx context.Context) context.Context {
 	t.Helper()
 	ctx, flush := grpcdump.NewRecorder(ctx)
