@@ -1,7 +1,6 @@
 GRPC bufconn/helloworld.v1.GreeterService/ListGreetings
-:authority: bufnet
-content-type: application/grpc
-user-agent: grpc-go/1.56.1
+key-bin: dmFsdWU
+key: val
 
 === client
 {
@@ -26,6 +25,13 @@ user-agent: grpc-go/1.56.1
  "message": "Hi John Appleseed-2"
 }
 
+
+=== header
+key-bin: dmFsdWU
+key: val
+
+=== trailer
+trailer-1: hello
 
 === status
 {

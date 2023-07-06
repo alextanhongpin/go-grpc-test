@@ -1,8 +1,9 @@
 GRPC bufconn/helloworld.v1.GreeterService/SayHello
-user-agent: grpc-go/1.56.1
-:authority: bufnet
-authorization: xyz
 content-type: application/grpc
+authorization: xyz
+x-test-id: ada4f5c6-063e-4bcb-b514-ef28de94db28
+key: val
+key-bin: YGY
 
 === client
 {
@@ -15,6 +16,16 @@ content-type: application/grpc
  "message": "Hello John Doe"
 }
 
+
+=== header
+authorization: xyz
+x-test-id: ada4f5c6-063e-4bcb-b514-ef28de94db28
+key: val
+key-bin: YGY
+content-type: application/grpc
+
+=== trailer
+trailer-1: hello
 
 === status
 {

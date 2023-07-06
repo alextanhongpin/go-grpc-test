@@ -16,3 +16,5 @@ metadata:
         - application/grpc
     user-agent:
         - grpc-go/1.56.1
+header: null
+trailer: null

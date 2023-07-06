@@ -1,7 +1,5 @@
 GRPC bufconn/helloworld.v1.GreeterService/Chat
-:authority: bufnet
-content-type: application/grpc
-user-agent: grpc-go/1.56.1
+key: value
 
 === client
 {
@@ -26,6 +24,12 @@ user-agent: grpc-go/1.56.1
  "message": "REPLY: bar"
 }
 
+
+=== header
+key: value
+
+=== trailer
+trailer-1: hello
 
 === status
 {

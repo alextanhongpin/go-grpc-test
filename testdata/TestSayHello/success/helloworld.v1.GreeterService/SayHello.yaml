@@ -19,3 +19,17 @@ metadata:
         - application/grpc
     user-agent:
         - grpc-go/1.56.1
+header:
+    authorization:
+        - xyz
+    content-type:
+        - application/grpc
+    key:
+        - val
+    key-bin:
+        - '`f'
+    x-test-id:
+        - ada4f5c6-063e-4bcb-b514-ef28de94db28
+trailer:
+    trailer-1:
+        - hello

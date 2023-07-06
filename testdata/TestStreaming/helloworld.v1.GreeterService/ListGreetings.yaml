@@ -23,3 +23,11 @@ metadata:
         - application/grpc
     user-agent:
         - grpc-go/1.56.1
+header:
+    key:
+        - val
+    key-bin:
+        - value
+trailer:
+    trailer-1:
+        - hello

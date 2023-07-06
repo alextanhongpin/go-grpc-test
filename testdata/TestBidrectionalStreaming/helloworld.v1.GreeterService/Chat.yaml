@@ -21,5 +21,15 @@ metadata:
         - bufnet
     content-type:
         - application/grpc
+    hello:
+        - greeting
+    hello-bin:
+        - greeting
     user-agent:
         - grpc-go/1.56.1
+header:
+    key:
+        - value
+trailer:
+    trailer-1:
+        - hello
