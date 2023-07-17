@@ -2,12 +2,14 @@ package grpcdump
 
 import (
 	"context"
+	"fmt"
 	"net"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // TODO: Separate grpctest and grpcdump
@@ -44,6 +46,7 @@ func NewRecorder(ctx context.Context) (context.Context, func() *Dump) {
 
 type Message struct {
 	Origin  string `json:"origin"` // server or client
+	Name    string `json:"name"`
 	Message any    `json:"message"`
 }
 
@@ -84,13 +87,24 @@ func (s *serverStreamWrapper) SendMsg(m interface{}) error {
 		return err
 	}
 
-	s.messages = append(s.messages, Message{
-		Origin:  OriginServer,
-		Message: m,
-	})
+	s.messages = append(s.messages, origin(OriginServer, m))
 
 	return nil
+}
 
+func origin(origin string, v any) Message {
+	msg, ok := v.(interface {
+		ProtoReflect() protoreflect.Message
+	})
+	if !ok {
+		panic("message is not valid")
+	}
+
+	return Message{
+		Origin:  origin,
+		Name:    fmt.Sprint(msg.ProtoReflect().Descriptor().FullName().Name()),
+		Message: v,
+	}
 }
 
 func (s *serverStreamWrapper) RecvMsg(m interface{}) error {
@@ -98,10 +112,7 @@ func (s *serverStreamWrapper) RecvMsg(m interface{}) error {
 		return err
 	}
 
-	s.messages = append(s.messages, Message{
-		Origin:  OriginClient,
-		Message: m,
-	})
+	s.messages = append(s.messages, origin(OriginClient, m))
 
 	return nil
 }
@@ -155,15 +166,10 @@ func UnaryInterceptor() grpc.ServerOption {
 			md.Delete(headerTestID)
 
 			res, err := handler(ctx, req)
-			messages := []Message{
-				{Origin: OriginClient, Message: req},
-			}
+			messages := []Message{origin(OriginClient, req)}
 
 			if err == nil {
-				messages = append(messages, Message{
-					Origin:  OriginServer,
-					Message: res,
-				})
+				messages = append(messages, origin(OriginServer, res))
 			}
 
 			testIds[id] = &Dump{
@@ -197,6 +203,8 @@ func WithUnaryInterceptor() grpc.DialOption {
 			if err := invoker(ctx, method, req, res, cc, opts...); err != nil {
 				return err
 			}
+
+			header.Delete(headerTestID)
 
 			testIds[testID].Trailer = trailer
 			testIds[testID].Header = header

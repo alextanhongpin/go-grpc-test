@@ -25,6 +25,7 @@ type GreeterServiceClient interface {
 	// Sends a greeting
 	SayHello(ctx context.Context, in *SayHelloRequest, opts ...grpc.CallOption) (*SayHelloResponse, error)
 	ListGreetings(ctx context.Context, in *ListGreetingsRequest, opts ...grpc.CallOption) (GreeterService_ListGreetingsClient, error)
+	RecordGreetings(ctx context.Context, opts ...grpc.CallOption) (GreeterService_RecordGreetingsClient, error)
 	Chat(ctx context.Context, opts ...grpc.CallOption) (GreeterService_ChatClient, error)
 }
 
@@ -77,8 +78,42 @@ func (x *greeterServiceListGreetingsClient) Recv() (*ListGreetingsResponse, erro
 	return m, nil
 }
 
+func (c *greeterServiceClient) RecordGreetings(ctx context.Context, opts ...grpc.CallOption) (GreeterService_RecordGreetingsClient, error) {
+	stream, err := c.cc.NewStream(ctx, &GreeterService_ServiceDesc.Streams[1], "/helloworld.v1.GreeterService/RecordGreetings", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &greeterServiceRecordGreetingsClient{stream}
+	return x, nil
+}
+
+type GreeterService_RecordGreetingsClient interface {
+	Send(*RecordGreetingsRequest) error
+	CloseAndRecv() (*RecordGreetingsResponse, error)
+	grpc.ClientStream
+}
+
+type greeterServiceRecordGreetingsClient struct {
+	grpc.ClientStream
+}
+
+func (x *greeterServiceRecordGreetingsClient) Send(m *RecordGreetingsRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *greeterServiceRecordGreetingsClient) CloseAndRecv() (*RecordGreetingsResponse, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(RecordGreetingsResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *greeterServiceClient) Chat(ctx context.Context, opts ...grpc.CallOption) (GreeterService_ChatClient, error) {
-	stream, err := c.cc.NewStream(ctx, &GreeterService_ServiceDesc.Streams[1], "/helloworld.v1.GreeterService/Chat", opts...)
+	stream, err := c.cc.NewStream(ctx, &GreeterService_ServiceDesc.Streams[2], "/helloworld.v1.GreeterService/Chat", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +150,7 @@ type GreeterServiceServer interface {
 	// Sends a greeting
 	SayHello(context.Context, *SayHelloRequest) (*SayHelloResponse, error)
 	ListGreetings(*ListGreetingsRequest, GreeterService_ListGreetingsServer) error
+	RecordGreetings(GreeterService_RecordGreetingsServer) error
 	Chat(GreeterService_ChatServer) error
 	mustEmbedUnimplementedGreeterServiceServer()
 }
@@ -128,6 +164,9 @@ func (UnimplementedGreeterServiceServer) SayHello(context.Context, *SayHelloRequ
 }
 func (UnimplementedGreeterServiceServer) ListGreetings(*ListGreetingsRequest, GreeterService_ListGreetingsServer) error {
 	return status.Errorf(codes.Unimplemented, "method ListGreetings not implemented")
+}
+func (UnimplementedGreeterServiceServer) RecordGreetings(GreeterService_RecordGreetingsServer) error {
+	return status.Errorf(codes.Unimplemented, "method RecordGreetings not implemented")
 }
 func (UnimplementedGreeterServiceServer) Chat(GreeterService_ChatServer) error {
 	return status.Errorf(codes.Unimplemented, "method Chat not implemented")
@@ -184,6 +223,32 @@ func (x *greeterServiceListGreetingsServer) Send(m *ListGreetingsResponse) error
 	return x.ServerStream.SendMsg(m)
 }
 
+func _GreeterService_RecordGreetings_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(GreeterServiceServer).RecordGreetings(&greeterServiceRecordGreetingsServer{stream})
+}
+
+type GreeterService_RecordGreetingsServer interface {
+	SendAndClose(*RecordGreetingsResponse) error
+	Recv() (*RecordGreetingsRequest, error)
+	grpc.ServerStream
+}
+
+type greeterServiceRecordGreetingsServer struct {
+	grpc.ServerStream
+}
+
+func (x *greeterServiceRecordGreetingsServer) SendAndClose(m *RecordGreetingsResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *greeterServiceRecordGreetingsServer) Recv() (*RecordGreetingsRequest, error) {
+	m := new(RecordGreetingsRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func _GreeterService_Chat_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(GreeterServiceServer).Chat(&greeterServiceChatServer{stream})
 }
@@ -227,6 +292,11 @@ var GreeterService_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "ListGreetings",
 			Handler:       _GreeterService_ListGreetings_Handler,
 			ServerStreams: true,
+		},
+		{
+			StreamName:    "RecordGreetings",
+			Handler:       _GreeterService_RecordGreetings_Handler,
+			ClientStreams: true,
 		},
 		{
 			StreamName:    "Chat",

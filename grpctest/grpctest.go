@@ -11,14 +11,12 @@ import (
 
 const bufSize = 1024 * 1024
 
-// NOTE: hackish implementation to extract the dump from the grpc server.
-
 var lis *bufconn.Listener
 
 const addr = "bufnet"
 
 func DialContext(ctx context.Context, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
-	opts = append([]grpc.DialOption{grpc.WithContextDialer(bufDialer)}, opts...)
+	opts = append(opts, grpc.WithContextDialer(bufDialer))
 	conn, err := grpc.DialContext(ctx, addr, opts...)
 	if err != nil {
 		return nil, err
@@ -31,7 +29,6 @@ func ListenAndServe(fn func(*grpc.Server), opts ...grpc.ServerOption) func() {
 	lis = bufconn.Listen(bufSize)
 
 	srv := grpc.NewServer(opts...)
-
 	fn(srv)
 
 	done := make(chan bool)

@@ -14,6 +14,8 @@ service GreeterService {
 
   rpc ListGreetings (ListGreetingsRequest) returns (stream ListGreetingsResponse) {}
 
+  rpc RecordGreetings (stream RecordGreetingsRequest) returns (RecordGreetingsResponse) {}
+
   rpc Chat(stream ChatRequest) returns (stream ChatResponse) {}
 }
 
@@ -28,11 +30,19 @@ message SayHelloResponse {
 }
 
 message ListGreetingsRequest {
-  string name = 1;
+  int64 count = 1;
 }
 
 message ListGreetingsResponse {
   string message = 1;
+}
+
+message RecordGreetingsRequest {
+  string message = 1;
+}
+
+message RecordGreetingsResponse {
+  int64 count = 1;
 }
 
 message ChatRequest {

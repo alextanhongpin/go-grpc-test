@@ -11,6 +11,7 @@ import (
 	"github.com/alextanhongpin/go-grpc-test/grpcdump"
 	"github.com/alextanhongpin/go-grpc-test/grpctest"
 	pb "github.com/alextanhongpin/go-grpc-test/helloworld/v1"
+	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -21,15 +22,18 @@ func TestMain(m *testing.M) {
 	stop := grpctest.ListenAndServe(func(srv *grpc.Server) {
 		pb.RegisterGreeterServiceServer(srv, &server{})
 	},
+		// Setup grpcdump on the server side.
+		// Also set on the client side, but only the `WithUnaryInterceptor`.
 		grpcdump.UnaryInterceptor(),
 		grpcdump.StreamInterceptor(),
 	)
+
 	code := m.Run()
 	stop()
 	os.Exit(code)
 }
 
-func TestBidrectionalStreaming(t *testing.T) {
+func TestClientStreaming(t *testing.T) {
 	ctx := context.Background()
 	conn := grpcDialContext(t, ctx)
 
@@ -38,12 +42,46 @@ func TestBidrectionalStreaming(t *testing.T) {
 
 	// Create a new recorder.
 	ctx = dumpGRPC(t, ctx)
-	ctx = metadata.AppendToOutgoingContext(ctx, "hello-bin", "greeting", "hello", "greeting")
+	ctx = metadata.AppendToOutgoingContext(ctx,
+		"md-val", "md-val",
+		"md-val-bin", "md-val-bin",
+	)
 
-	stream, err := client.Chat(ctx)
-	if err != nil {
-		t.Error(err)
+	assert := assert.New(t)
+	stream, err := client.RecordGreetings(ctx)
+	assert.Nil(err)
+
+	// Send 5 greetings.
+	n := 5
+	for i := 0; i < n; i++ {
+		err := stream.Send(&pb.RecordGreetingsRequest{
+			Message: "hi sir",
+		})
+		assert.Nil(err)
 	}
+
+	reply, err := stream.CloseAndRecv()
+	assert.Nil(err)
+	assert.Equal(reply.GetCount(), int64(n))
+}
+
+func TestBidirectionalStreaming(t *testing.T) {
+	ctx := context.Background()
+	conn := grpcDialContext(t, ctx)
+
+	// Create a new client.
+	client := pb.NewGreeterServiceClient(conn)
+
+	// Create a new recorder.
+	ctx = dumpGRPC(t, ctx)
+	ctx = metadata.AppendToOutgoingContext(ctx,
+		"md-val", "md-val",
+		"md-val-bin", "md-val-bin",
+	)
+
+	assert := assert.New(t)
+	stream, err := client.Chat(ctx)
+	assert.Nil(err)
 
 	done := make(chan bool)
 
@@ -54,25 +92,22 @@ func TestBidrectionalStreaming(t *testing.T) {
 				close(done)
 				return
 			}
-			if err != nil {
-				t.Error(err)
-			}
+			assert.Nil(err)
 		}
 	}()
 
 	for _, msg := range []string{"foo", "bar"} {
-		if err := stream.Send(&pb.ChatRequest{
+		err := stream.Send(&pb.ChatRequest{
 			Message: msg,
-		}); err != nil {
-			t.Error(err)
-		}
+		})
+		assert.Nil(err)
 	}
 	stream.CloseSend()
 
 	<-done
 }
 
-func TestStreaming(t *testing.T) {
+func TestServerStreaming(t *testing.T) {
 	ctx := context.Background()
 	conn := grpcDialContext(t, ctx)
 
@@ -82,12 +117,16 @@ func TestStreaming(t *testing.T) {
 	// Create a new recorder.
 	ctx = dumpGRPC(t, ctx)
 
+	ctx = metadata.AppendToOutgoingContext(ctx,
+		"md-val", "md-val",
+		"md-val-bin", "md-val-bin",
+	)
+
+	assert := assert.New(t)
 	stream, err := client.ListGreetings(ctx, &pb.ListGreetingsRequest{
-		Name: "John Appleseed",
+		Count: 5,
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	assert.Nil(err)
 
 	done := make(chan bool)
 
@@ -99,61 +138,71 @@ func TestStreaming(t *testing.T) {
 				break
 			}
 
-			if err != nil {
-				t.Error(err)
-			}
-
-			t.Log(stream.Header())
-			t.Log(stream.Trailer())
+			assert.Nil(err)
 		}
 	}()
 
 	<-done
 }
 
-func TestSayHello(t *testing.T) {
+func TestUnary(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("success", func(t *testing.T) {
 		conn := grpcDialContext(t, ctx)
-		client := pb.NewGreeterServiceClient(conn)
+
 		// Send token.
 		md := metadata.New(map[string]string{
 			"authorization": "xyz",
 		})
 
-		//md := metadata.Pairs("authorization", "sometoken")
+		// This will override all other context, so call this first.
 		ctx = metadata.NewOutgoingContext(ctx, md)
+
+		// Create a new client.
+		client := pb.NewGreeterServiceClient(conn)
+
+		// Create a new recorder.
 		ctx = dumpGRPC(t, ctx)
 
-		// Anything linked to this variable will fetch response headers.
+		ctx = metadata.AppendToOutgoingContext(ctx,
+			"md-val", "md-val",
+			"md-val-bin", "md-val-bin",
+		)
+
 		_, err := client.SayHello(ctx, &pb.SayHelloRequest{
 			Name: "John Doe",
 		})
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.Nil(t, err)
 	})
 
 	t.Run("unauthorized", func(t *testing.T) {
 		conn := grpcDialContext(t, ctx)
-		client := pb.NewGreeterServiceClient(conn)
+
 		// Send token.
 		md := metadata.New(map[string]string{
 			"authorization": "abc",
 		})
 
-		//md := metadata.Pairs("authorization", "sometoken")
+		// This will override all other context, so call this first.
 		ctx = metadata.NewOutgoingContext(ctx, md)
+
+		// Create a new client.
+		client := pb.NewGreeterServiceClient(conn)
+
+		// Create a new recorder.
 		ctx = dumpGRPC(t, ctx)
+
+		ctx = metadata.AppendToOutgoingContext(ctx,
+			"md-val", "md-val",
+			"md-val-bin", "md-val-bin",
+		)
 
 		// Anything linked to this variable will fetch response headers.
 		_, err := client.SayHello(ctx, &pb.SayHelloRequest{
 			Name: "John Doe",
 		})
-		if err != nil {
-			t.Errorf("SayHello failed: %v", err)
-		}
+		assert.Nil(t, err)
 	})
 }
 
@@ -168,63 +217,124 @@ func (s *server) SayHello(ctx context.Context, in *pb.SayHelloRequest) (*pb.SayH
 		return nil, status.Error(codes.Unauthenticated, "no token present")
 	}
 
-	ctx = metadata.NewOutgoingContext(ctx, md)
-
 	token := md.Get("authorization")[0]
 	if token != "xyz" {
-		return nil, status.Error(codes.Unauthenticated, "no token present")
+		return nil, status.Error(codes.Unauthenticated, "token expired")
 	}
 
-	ctx = metadata.AppendToOutgoingContext(ctx, "key", "val", "key-bin", string([]byte{96, 102}))
+	ctx = metadata.NewOutgoingContext(ctx, nil)
+	ctx = metadata.AppendToOutgoingContext(ctx,
+		"header-key", "header-val",
+		"header-key-bin", "header-val-bin",
+	)
 	header, _ := metadata.FromOutgoingContext(ctx)
+
+	// For unary.
 	if err := grpc.SendHeader(ctx, header); err != nil {
-		return nil, status.Errorf(codes.Internal, "unable to send 'key' header")
+		return nil, status.Errorf(codes.Internal, "unable to send gRPC header: %v", err)
 	}
 
 	trailer := metadata.New(map[string]string{
-		"trailer-1": "hello",
+		"trailer-key":     "trailer-val",
+		"trailer-key-bin": "trailer-val-bin",
 	})
+
+	// For unary.
 	if err := grpc.SetTrailer(ctx, trailer); err != nil {
-		return nil, status.Errorf(codes.Internal, "unable to send 'trailer-1' trailer")
+		return nil, status.Errorf(codes.Internal, "unable to send gRPC trailer: %v", err)
 	}
 
 	return &pb.SayHelloResponse{Message: "Hello " + in.GetName()}, nil
 }
 
-func (s *server) ListGreetings(in *pb.ListGreetingsRequest, srv pb.GreeterService_ListGreetingsServer) error {
-	ctx := srv.Context()
-	ctx = metadata.AppendToOutgoingContext(ctx, "key", "val", "key-bin", "value")
+func (s *server) RecordGreetings(stream pb.GreeterService_RecordGreetingsServer) error {
+	ctx := stream.Context()
+	ctx = metadata.AppendToOutgoingContext(ctx,
+		"header-key", "header-val",
+		"header-key-bin", "header-val-bin",
+	)
 
-	header, _ := metadata.FromOutgoingContext(ctx)
-	if err := srv.SendHeader(header); err != nil {
-		return status.Errorf(codes.Internal, "unable to send 'key' header")
-	}
-
-	for i := 0; i < 3; i++ {
-		srv.Send(&pb.ListGreetingsResponse{
-			Message: fmt.Sprintf("Hi %s-%d", in.GetName(), i),
-		})
+	if header, ok := metadata.FromOutgoingContext(ctx); ok {
+		// For stream.
+		if err := stream.SendHeader(header); err != nil {
+			return status.Errorf(codes.Internal, "unable to send gRPC header: %v", err)
+		}
 	}
 
 	trailer := metadata.New(map[string]string{
-		"trailer-1": "hello",
+		"trailer-key":     "trailer-val",
+		"trailer-key-bin": "trailer-val-bin",
 	})
-	srv.SetTrailer(trailer)
+
+	// For unary.
+	stream.SetTrailer(trailer)
+
+	var msgs []string
+	for {
+		msg, err := stream.Recv()
+		if err == io.EOF {
+
+			return stream.SendAndClose(&pb.RecordGreetingsResponse{
+				Count: int64(len(msgs)),
+			})
+		}
+		if err != nil {
+			return err
+		}
+		msgs = append(msgs, msg.GetMessage())
+	}
+}
+
+func (s *server) ListGreetings(in *pb.ListGreetingsRequest, stream pb.GreeterService_ListGreetingsServer) error {
+	ctx := stream.Context()
+	ctx = metadata.AppendToOutgoingContext(ctx,
+		"header-key", "header-val",
+		"header-key-bin", "header-val-bin",
+	)
+
+	header, _ := metadata.FromOutgoingContext(ctx)
+
+	// For stream.
+	if err := stream.SendHeader(header); err != nil {
+		return status.Errorf(codes.Internal, "unable to send gRPC header: %v", err)
+	}
+
+	n := in.GetCount()
+	for i := 0; i < int(n); i++ {
+		err := stream.Send(&pb.ListGreetingsResponse{
+			Message: fmt.Sprintf("hi sir (%d)", i+1),
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	trailer := metadata.New(map[string]string{
+		"trailer-key":     "trailer-val",
+		"trailer-key-bin": "trailer-val-bin",
+	})
+
+	// For stream.
+	stream.SetTrailer(trailer)
 
 	return nil
 }
 
 func (s *server) Chat(stream pb.GreeterService_ChatServer) error {
 	ctx := stream.Context()
+	ctx = metadata.AppendToOutgoingContext(ctx,
+		"header-key", "header-val",
+		"header-key-bin", "header-val-bin",
+	)
 
-	ctx = metadata.AppendToOutgoingContext(ctx, "key", "value")
 	header, _ := metadata.FromOutgoingContext(ctx)
 	if err := stream.SendHeader(header); err != nil {
-		return status.Errorf(codes.Internal, "unable to send 'key' header")
+		return status.Errorf(codes.Internal, "unable to send gRPC header: %v", err)
 	}
 
 	trailer := metadata.New(map[string]string{
-		"trailer-1": "hello",
+		"trailer-key":     "trailer-val",
+		"trailer-key-bin": "trailer-val-bin",
 	})
 	stream.SetTrailer(trailer)
 
@@ -253,8 +363,6 @@ func dumpGRPCUnary(t *testing.T, ctx context.Context) (context.Context, []grpc.C
 	t.Cleanup(func() {
 		dump := flush()
 
-		testutil.DumpYAML(t, dump, testutil.FileName(dump.FullMethod))
-
 		b, err := dump.AsText()
 		if err != nil {
 			t.Fatal(err)
@@ -272,9 +380,6 @@ func dumpGRPC(t *testing.T, ctx context.Context) context.Context {
 
 	t.Cleanup(func() {
 		dump := flush()
-		fmt.Println("DUMP", dump)
-
-		testutil.DumpYAML(t, dump, testutil.FileName(dump.FullMethod))
 
 		b, err := dump.AsText()
 		if err != nil {
@@ -290,6 +395,7 @@ func dumpGRPC(t *testing.T, ctx context.Context) context.Context {
 func grpcDialContext(t *testing.T, ctx context.Context) *grpc.ClientConn {
 	conn, err := grpctest.DialContext(ctx,
 		grpc.WithInsecure(),
+		// Setup grpcdump on the client side.
 		grpcdump.WithUnaryInterceptor(),
 	)
 	if err != nil {
