@@ -187,7 +187,7 @@ func writeMethod(addr, fullMethod string) string {
 }
 
 func writeMetadata(sb *strings.Builder, prefix string, md metadata.MD) {
-	if prefix != "" {
+	if prefix != "" && len(md) > 0 {
 		sb.WriteString(prefix)
 		sb.WriteRune('\n')
 	}

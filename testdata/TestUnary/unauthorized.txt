@@ -1,16 +1,15 @@
 GRPC bufconn/helloworld.v1.GreeterService/SayHello
-:authority: bufnet
-content-type: application/grpc
 authorization: abc
-user-agent: grpc-go/1.56.2
 md-val: md-val
 md-val-bin: bWQtdmFsLWJpbg
+:authority: bufnet
+content-type: application/grpc
+user-agent: grpc-go/1.56.2
 
 
 ###
 
 
-=== header
 
 === client: SayHelloRequest
 {
@@ -23,4 +22,3 @@ md-val-bin: bWQtdmFsLWJpbg
  "message": "token expired"
 }
 
-=== trailer
